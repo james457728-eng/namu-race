@@ -10,7 +10,7 @@ app.get('/', (req, res) => {
         <div style="text-align:center; padding:50px; font-family:sans-serif; background:#f0f2f5; height:100vh; display:flex; flex-direction:column; justify-content:center; align-items:center;">
             <div style="background:white; padding:40px; border-radius:15px; box-shadow:0 10px 25px rgba(0,0,0,0.1); width: 400px;">
                 <h1 style="color:#00a495; margin-bottom:10px;">🌲 나무위키 레이스</h1>
-                <p style="color:#666; margin-bottom:30px;">최종 완성 (이동 횟수 표시)</p>
+                <p style="color:#666; margin-bottom:30px;">서버 배포 완료 버전</p>
                 <form action="/start" method="GET" style="display:flex; flex-direction:column; gap:10px;">
                     <input type="text" name="start" placeholder="🚩 출발 (예: 아이유)" required style="padding:15px; border:1px solid #ddd; border-radius:8px; font-size:16px;">
                     <input type="text" name="goal" placeholder="🏁 도착 (예: 대한민국)" required style="padding:15px; border:1px solid #ddd; border-radius:8px; font-size:16px;">
@@ -21,11 +21,11 @@ app.get('/', (req, res) => {
     `);
 });
 
-// 2. 게임 시작 (카운트 0으로 초기화)
+// 2. 게임 시작 (리다이렉트)
 app.get('/start', (req, res) => {
     const start = req.query.start;
     const goal = req.query.goal;
-    // count=0 부터 시작
+    // 한글 깨짐 방지를 위해 encodeURIComponent 필수
     res.redirect(`/game/${encodeURIComponent(start)}?goal=${encodeURIComponent(goal || '')}&count=0`);
 });
 
@@ -40,7 +40,7 @@ app.get('/gameover', (req, res) => {
     `);
 });
 
-// 4. 게임 로직 (정규식 주소 처리)
+// 4. 게임 로직 (모든 /game/... 주소를 다 받음)
 app.get(/^\/game\/(.*)/, async (req, res) => {
     let keyword = req.params[0];
     
@@ -49,15 +49,14 @@ app.get(/^\/game\/(.*)/, async (req, res) => {
         keyword = keyword.split('?')[0];
     }
     
+    // 한글 복구
     try { keyword = decodeURIComponent(keyword); } catch(e) {}
 
     const goal = req.query.goal || ""; 
-    // [추가] 현재 이동 횟수 가져오기 (없으면 0)
     const count = parseInt(req.query.count) || 0;
-
     const targetUrl = `https://namu.wiki/w/${encodeURIComponent(keyword)}`;
 
-    console.log(`🌲 ${count}번째 이동: ${keyword} (목표: ${goal})`);
+    console.log(`🌲 이동: ${keyword}`);
 
     // [승리 판정]
     if (goal && keyword.replace(/_/g, ' ').trim() === goal.replace(/_/g, ' ').trim()) {
@@ -100,7 +99,6 @@ app.get(/^\/game\/(.*)/, async (req, res) => {
         $('img').each((i, el) => {
             const src = $(el).attr('src');
             const dataSrc = $(el).attr('data-src');
-            
             if (dataSrc) {
                 let realSrc = dataSrc.startsWith('/') ? `https://namu.wiki${dataSrc}` : dataSrc;
                 $(el).attr('src', realSrc);
@@ -120,8 +118,6 @@ app.get(/^\/game\/(.*)/, async (req, res) => {
         $('[class*="Sidebar"]').remove();
         $('.s-alert').remove();
 
-        let linkCount = 0;
-
         // --- 링크 변환 ---
         $('a').each((i, el) => {
             let href = $(el).attr('href');
@@ -134,23 +130,15 @@ app.get(/^\/game\/(.*)/, async (req, res) => {
                 !href.includes('member') &&
                 !href.includes('history')
                ) {
-                
                 const nextKeyword = href.replace('/w/', '');
-                // [핵심] 다음 링크 클릭 시 count + 1 해서 넘겨줌
                 const newHref = `/game/${nextKeyword}?goal=${encodeURIComponent(goal)}&count=${count + 1}`;
-                
-                $(el).attr('href', newHref);
-                $(el).css('cursor', 'pointer');
-                
-                linkCount++;
+                $(el).attr('href', newHref).css('cursor', 'pointer');
             } else {
-                $(el).removeAttr('href')
-                    .css('cursor', 'not-allowed')
-                    .css('opacity', '0.5');
+                $(el).removeAttr('href').css('cursor', 'not-allowed').css('opacity', '0.5');
             }
         });
 
-        // HUD (상단바) - 이동 횟수 표시 추가
+        // HUD
         $('body').prepend(`
             <div style="position:fixed; top:0; left:0; width:100%; background:rgba(0,0,0,0.85); color:white; padding:10px; text-align:center; z-index:9999999; backdrop-filter:blur(5px); border-bottom: 2px solid #00a495;">
                 <div style="display:flex; justify-content:center; gap:20px; align-items:center; font-size:1.1em;">
@@ -176,16 +164,10 @@ app.get(/^\/game\/(.*)/, async (req, res) => {
         res.send($.html());
 
     } catch (e) {
-        console.log(e.message);
-        res.send(`
-            <div style="text-align:center; padding:50px;">
-                <h2 style="color:red;">⚠️ 오류 발생</h2>
-                <p>나무위키 접속 차단 또는 주소 오류</p>
-                <p>${e.message}</p>
-                <a href="/">처음으로</a>
-            </div>
-        `);
+        res.send(`오류: ${e.message}`);
     }
 });
 
-app.listen(3000, () => console.log('🌲 서버 정상 작동 중! http://localhost:3000'));
+// [중요] 포트 설정 (Render에서 주는 포트 사용)
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, '0.0.0.0', () => console.log(`🚀 서버 시작! 포트: ${PORT}`));
